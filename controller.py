@@ -12,11 +12,14 @@ class StudentController:
         self.view.btn_delete.config(command=self.delete_student)
         self.view.btn_export.config(command=self.export_excel)
         
+        # Kích hoạt sự kiện nút màu tím Thống kê Báo cáo
+        self.view.btn_stats.config(command=self.open_statistic)
+        
         # Đăng ký sự kiện tìm kiếm
         self.view.btn_search.config(command=self.search_student)
         self.view.btn_reset_search.config(command=self.reset_search)
 
-        # Hiển thị dữ liệu trống ban đầu để cập nhật dòng đếm
+        # Hiển thị dữ liệu ban đầu từ kho lưu trữ ra view
         self.refresh_treeview()
 
     def refresh_treeview(self, df_to_display=None):
@@ -45,6 +48,10 @@ class StudentController:
             text=f"Số SV đạt học bổng: {count_dat}   |   Số SV không đạt: {count_truot}"
         )
 
+        # Nếu cửa sổ thống kê đang mở, tự động gọi hàm cập nhật lại biểu đồ tròn
+        if hasattr(self, 'stat_window') and self.stat_window.window.winfo_exists():
+            self.stat_window.generate_report()
+
     def get_data_from_entries(self, entries):
         return {key: entry.get().strip() for key, entry in entries.items()}
 
@@ -53,14 +60,13 @@ class StudentController:
 
         def save():
             data = self.get_data_from_entries(entries)
-            is_valid, msg = self.model.validate_data(data['MSV'], data['HoTen'], data['GPA'], data['DRL'])
+            is_valid, msg = self.model.validate_data(data['MSV'], data['HoTen'], data['Lop'], data['SDT'], data['GPA'], data['DRL'])
             if not is_valid:
                 messagebox.showwarning("Lỗi", msg, parent=dialog)
                 return
             if data['MSV'] in self.model.df['MSV'].values:
                 messagebox.showwarning("Lỗi", "Mã sinh viên đã tồn tại!", parent=dialog)
                 return
-
             self.model.add_student(data)
             self.refresh_treeview()
             dialog.destroy()
@@ -87,7 +93,7 @@ class StudentController:
 
         def save():
             data = self.get_data_from_entries(entries)
-            is_valid, msg = self.model.validate_data(data['MSV'], data['HoTen'], data['GPA'], data['DRL'])
+            is_valid, msg = self.model.validate_data(data['MSV'], data['HoTen'], data['Lop'], data['SDT'], data['GPA'], data['DRL'])
             if not is_valid:
                 messagebox.showwarning("Lỗi", msg, parent=dialog)
                 return
@@ -113,7 +119,6 @@ class StudentController:
             self.model.delete_student(msv)
             self.refresh_treeview()
 
-    # HÀM TÌM KIẾM ĐÃ ĐƯỢC CẢI TIẾN THÊM POPUP THÔNG BÁO
     def search_student(self):
         query = self.view.entry_search.get().strip()
         if not query:
@@ -121,15 +126,12 @@ class StudentController:
             return
 
         filtered_df = self.model.search_students(query)
-        
-        # Cập nhật danh sách hiển thị và bộ đếm bên dưới trước
         self.refresh_treeview(filtered_df)
 
         if filtered_df.empty:
             messagebox.showinfo("Kết quả tìm kiếm", f"Không tìm thấy sinh viên nào khớp với từ khóa: '{query}'")
             return
         
-        # Gom thông tin các sinh viên tìm thấy thành chuỗi văn bản để hiển thị lên hộp thoại thông báo
         thong_tin_popup = "🔍 KẾT QUẢ TÌM THẤY:\n"
         thong_tin_popup += "="*40 + "\n"
         
@@ -141,12 +143,15 @@ class StudentController:
             thong_tin_popup += f"➔ XÉT HỌC BỔNG: {row['KetQua'].upper()}\n"
             thong_tin_popup += "-"*40 + "\n"
             
-        # Hiển thị bảng thông báo lên màn hình
         messagebox.showinfo("Thông tin tìm kiếm sinh viên", thong_tin_popup)
         
     def reset_search(self):
         self.view.entry_search.delete(0, tk.END)
         self.refresh_treeview()
+
+    def open_statistic(self):
+        from thongke import StudentStatistic
+        self.stat_window = StudentStatistic(self.view.root, self.model)
 
     def export_excel(self):
         if self.model.df.empty:
